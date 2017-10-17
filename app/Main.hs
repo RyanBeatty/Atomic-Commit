@@ -20,21 +20,30 @@ spawnServer = do
     say $ "pid: " ++ (show my_pid)
     liftIO $ threadDelay (10^6)
 
-spawnServers :: Int -> Process ()
+spawnMaster :: Process (ProcessId)
+spawnMaster = spawnLocal $ forever $ say "spawned master" 
+
+spawnMasterAndServers :: Int -> Process ()
 spawnServers num_servers = do
+  m_pid <- spawnMaster
   -- Spawn |num_servers| number of servers and get all of the pids of the servers.
   pids <- replicateM num_servers spawnServer
   -- Link all of the spawned servers to this process so that they will all exit when
   -- the controller exits.
-  mapM_ link pids
+  mapM_ link (m_pid:pids)
 
+-- Event-loop of the Controller process. Will poll stdinput for commands
+-- issued by the user until told to quit.
 runController :: Process ()
 runController = forever $ do
   liftIO $ TIO.putStr "Enter Command: "
   cmd <- liftIO $ TIO.getLine >>= return . T.strip
   case cmd of
-    "q" -> die ("Quiting Controller..." :: String)
-    _   -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
+    -- Terminate the controller immeadiately. This should also kill any linked processes.
+    "quit"  -> die ("Quiting Controller..." :: String)
+    "spawn master" -> spawnMasterAndServers 3 
+    -- User entered in an invalid command.
+    _       -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
 
 main :: IO ()
 main = do

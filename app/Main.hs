@@ -83,8 +83,8 @@ spawnServer = do
   spawnLocal $ do
     my_pid <- getSelfPid
     say $ "Spawned process: " ++ (show my_pid)
-    -- Get list of peers before starting to serve.
-    peers <- expect :: Process [ProcessId]
+    -- Get list of peers without my_pid before starting to serve.
+    peers <- filter (/= my_pid) <$> expect :: Process [ProcessId]
     -- Create ticker and link the ticker process to this process so
     -- that is will shutdown when this process terminates.
     ticker_pid <- spawnTicker my_pid

@@ -1,22 +1,45 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-} -- Allows automatic derivation of e.g. Monad
 module Main where
 
 import Lib
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever, mapM_, replicateM, sequence)
-import Control.Distributed.Process
-import Control.Distributed.Process.Node
+import Control.Monad.RWS.Lazy (
+  RWS, MonadReader, MonadWriter, MonadState,
+  ask, tell, get, execRWS)
+import Control.Distributed.Process (
+  Process, ProcessId, send, say, expect,
+  getSelfPid, spawnLocal, liftIO, die, link)
+import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
 import qualified Data.Text as T (pack, strip, append)
 import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
 
-data ProcessState = ProcessState
+data ServerConfig = ServerConfig
+  { myId  :: ProcessId   -- The proccess id of this server.
+  , peers :: [ProcessId] -- List of pids of peer processes that this process can communicate with.
+                         -- Should not include pid of this process.
+  }
+  deriving (Show)
+
+data ServerState = ServerState
   { -- List of pids of peer processes that this process can communicate with.
     -- Should not include pid of this process.
-    peers :: [ProcessId]
+    foo :: [ProcessId]
   }
+  deriving (Show)
+
+data Message = Message
+  deriving (Show)
+
+newtype ServerAction a = ServerAction { runAction :: RWS ServerConfig [Message] ServerState a }
+  deriving (
+    Functor, Applicative, Monad, MonadReader ServerConfig,
+    MonadWriter [Message], MonadState ServerState)
+
 
 -- Event-loop of the Controller process. Will poll stdinput for commands
 -- issued by the user until told to quit.
@@ -50,7 +73,7 @@ spawnServer = do
     peers <- expect :: Process [ProcessId]
     return ()
 
-runServer :: ProcessState -> Process ()
+runServer :: ServerState -> Process ()
 runServer state = undefined
 
 main :: IO ()

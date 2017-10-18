@@ -9,7 +9,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState,
-  ask, tell, get, execRWS)
+  ask, tell, get, runRWST)
 import Control.Distributed.Process (
   Process, ProcessId, send, say, expect,
   getSelfPid, spawnLocal, liftIO, die, link)
@@ -37,10 +37,6 @@ data ServerConfig = ServerConfig
 
 -- Mutable state of a server.
 data ServerState = ServerState
-  { -- List of pids of peer processes that this process can communicate with.
-    -- Should not include pid of this process.
-    foo :: [ProcessId]
-  }
   deriving (Show)
 
 -- Messages that servers will send and receive.
@@ -53,6 +49,9 @@ newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Messag
     MonadWriter [Message], MonadState ServerState)
 
 type ProcessAction a = ServerAction Process a
+
+newServerState :: ServerState
+newServerState = ServerState
 
 -- Event-loop of the Controller process. Will poll stdinput for commands
 -- issued by the user until told to quit.
@@ -89,6 +88,8 @@ spawnServer = do
     -- that is will shutdown when this process terminates.
     ticker_pid <- spawnTicker my_pid
     link ticker_pid
+    runRWST (runAction runServer) (ServerConfig my_pid peers) newServerState
+    return ()
 
 -- Create a ticker process that will periodically send ticks to
 -- the parent server.

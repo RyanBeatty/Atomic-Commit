@@ -7,7 +7,7 @@ import Lib
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
-  RWS, MonadReader, MonadWriter, MonadState,
+  RWST, MonadReader, MonadWriter, MonadState,
   ask, tell, get, execRWS)
 import Control.Distributed.Process (
   Process, ProcessId, send, say, expect,
@@ -18,6 +18,7 @@ import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
 
+-- Static config of the server.
 data ServerConfig = ServerConfig
   { myId  :: ProcessId   -- The proccess id of this server.
   , peers :: [ProcessId] -- List of pids of peer processes that this process can communicate with.
@@ -25,6 +26,7 @@ data ServerConfig = ServerConfig
   }
   deriving (Show)
 
+-- Mutable state of a server.
 data ServerState = ServerState
   { -- List of pids of peer processes that this process can communicate with.
     -- Should not include pid of this process.
@@ -32,13 +34,16 @@ data ServerState = ServerState
   }
   deriving (Show)
 
+-- Messages that servers will send and receive.
 data Message = Message
   deriving (Show)
 
-newtype ServerAction a = ServerAction { runAction :: RWS ServerConfig [Message] ServerState a }
+newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Message] ServerState m a }
   deriving (
     Functor, Applicative, Monad, MonadReader ServerConfig,
     MonadWriter [Message], MonadState ServerState)
+
+type ProcessAction a = ServerAction Process a
 
 
 -- Event-loop of the Controller process. Will poll stdinput for commands
@@ -73,8 +78,8 @@ spawnServer = do
     peers <- expect :: Process [ProcessId]
     return ()
 
-runServer :: ServerState -> Process ()
-runServer state = undefined
+runServer :: ProcessAction ()
+runServer = undefined
 
 main :: IO ()
 main = do

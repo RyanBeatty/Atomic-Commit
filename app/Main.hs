@@ -21,7 +21,7 @@ spawnServer = do
     liftIO $ threadDelay (10^6)
 
 spawnMaster :: Process (ProcessId)
-spawnMaster = spawnLocal $ forever $ say "spawned master" 
+spawnMaster = spawnLocal $ forever $ say "spawned master"
 
 spawnMasterAndServers :: Int -> Process ()
 spawnServers num_servers = do
@@ -41,7 +41,7 @@ runController = forever $ do
   case cmd of
     -- Terminate the controller immeadiately. This should also kill any linked processes.
     "quit"  -> die ("Quiting Controller..." :: String)
-    "spawn master" -> spawnMasterAndServers 3 
+    "spawn master" -> spawnMasterAndServers 3
     -- User entered in an invalid command.
     _       -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
 

@@ -18,28 +18,6 @@ data ProcessState = ProcessState
     peers :: [ProcessId]
   }
 
-runServer :: ProcessState -> Process ()
-runServer state = undefined
-
--- Spawn server processes. They will get the list of their peers and then start serving.
-spawnServer :: Process (ProcessId)
-spawnServer = do
-  spawnLocal $ forever $ do
-    my_pid <- getSelfPid
-    say $ "Spawned process: " ++ (show my_pid)
-    peers <- expect :: Process [ProcessId]
-    return ()
-
-spawnServers :: Int -> Process ()
-spawnServers num_servers = do
-  -- Spawn |num_servers| number of servers and get all of the pids of the servers.
-  pids <- replicateM num_servers spawnServer
-  -- Link all of the spawned servers to this process so that they will all exit when
-  -- the controller exits.
-  mapM_ link pids
-  -- Send the list of peers to every process that was spawned.
-  mapM_ (`send` pids) pids
-
 -- Event-loop of the Controller process. Will poll stdinput for commands
 -- issued by the user until told to quit.
 runController :: Process ()
@@ -52,6 +30,28 @@ runController = forever $ do
     "spawn master" -> spawnServers 3
     -- User entered in an invalid command.
     _       -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
+
+spawnServers :: Int -> Process ()
+spawnServers num_servers = do
+  -- Spawn |num_servers| number of servers and get all of the pids of the servers.
+  pids <- replicateM num_servers spawnServer
+  -- Link all of the spawned servers to this process so that they will all exit when
+  -- the controller exits.
+  mapM_ link pids
+  -- Send the list of peers to every process that was spawned.
+  mapM_ (`send` pids) pids
+
+-- Spawn server processes. They will get the list of their peers and then start serving.
+spawnServer :: Process (ProcessId)
+spawnServer = do
+  spawnLocal $ do
+    my_pid <- getSelfPid
+    say $ "Spawned process: " ++ (show my_pid)
+    peers <- expect :: Process [ProcessId]
+    return ()
+
+runServer :: ProcessState -> Process ()
+runServer state = undefined
 
 main :: IO ()
 main = do

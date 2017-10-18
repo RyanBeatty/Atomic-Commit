@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-} -- Allows automatic derivation of e.g. Monad
+{-# LANGUAGE DeriveGeneric              #-} -- Allows Generic, for auto-generation of serialization code
 module Main where
 
 import Lib
@@ -13,10 +14,17 @@ import Control.Distributed.Process (
   Process, ProcessId, send, say, expect,
   getSelfPid, spawnLocal, liftIO, die, link)
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
+import Data.Binary (Binary)
 import qualified Data.Text as T (pack, strip, append)
 import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
+import Data.Typeable (Typeable)
+import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
+
+data Tick = Tick
+  deriving (Show, Generic, Typeable)
+instance Binary Tick
 
 -- Static config of the server.
 data ServerConfig = ServerConfig
@@ -76,7 +84,14 @@ spawnServer = do
     my_pid <- getSelfPid
     say $ "Spawned process: " ++ (show my_pid)
     peers <- expect :: Process [ProcessId]
+    ticker_pid <- spawnTicker my_pid
+    link ticker_pid
     return ()
+
+spawnTicker :: ProcessId -> Process ProcessId
+spawnTicker parent_pid = spawnLocal $ forever $ do
+  send parent_pid Tick
+  liftIO $ threadDelay (10^6)
 
 runServer :: ProcessAction ()
 runServer = undefined

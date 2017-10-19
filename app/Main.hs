@@ -72,6 +72,7 @@ runController = forever $ do
   case cmd of
     -- Terminate the controller immeadiately. This should also kill any linked processes.
     "quit"  -> die ("Quiting Controller..." :: String)
+    -- Spawn and setup all of the servers.
     "spawn" -> spawnServers 1
     -- User entered in an invalid command.
     _       -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
@@ -128,10 +129,14 @@ runServer = do
 letterHandler :: Letter -> Process (ProcessAction ())
 letterHandler letter =
   case message letter of
-    Tick    -> return $ handleTick 
+    Tick           -> return $ handleTick
+    InitiateCommit -> return $ handleInitiateCommit
 
 handleTick :: ProcessAction ()
 handleTick = lift $ say "Got Tick"
+
+handleInitiateCommit :: ProcessAction ()
+handleInitiateCommit = undefined
 
 main :: IO ()
 main = do

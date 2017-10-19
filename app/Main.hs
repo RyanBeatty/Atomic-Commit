@@ -22,11 +22,6 @@ import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
 
--- A Tick message will be sent by the ticker process to its parent process for timeouts.
-data Tick = Tick
-  deriving (Show, Generic, Typeable)
-instance Binary Tick
-
 -- Static config of the server.
 data ServerConfig = ServerConfig
   { myId  :: ProcessId   -- The proccess id of this server.
@@ -40,15 +35,19 @@ data ServerState = ServerState
   deriving (Show)
 
 -- Messages that servers will send and receive.
-data Message = Message
-  deriving (Show)
+data Message =
+    Message
+  | Tick -- A Tick message will be sent by the ticker process to its parent process for timeouts.
+  deriving (Show, Generic, Typeable)
+instance Binary Message
 
 data Letter = Letter
   { senderOf    :: ProcessId
   , recipientOf :: ProcessId
   , message     :: Message
   }
-  deriving (Show)
+  deriving (Show, Generic, Typeable)
+instance Binary Letter
 
 newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Letter] ServerState m a }
   deriving (
@@ -102,18 +101,23 @@ spawnServer = do
 -- the parent server.
 spawnTicker :: ProcessId -> Process ProcessId
 spawnTicker parent_pid = spawnLocal $ forever $ do
-  send parent_pid Tick
+  my_pid <- getSelfPid
+  send parent_pid (Letter my_pid parent_pid Tick)
   liftIO $ threadDelay (10^6)
 
 runServer :: ProcessAction ()
 runServer = do
-  () <- lift $ receiveWait [
-      match (handleTick)
-    ]
+  action <- lift $ receiveWait [match (letterHandler)]
+  () <- action
   runServer
 
-handleTick :: Tick -> Process ()
-handleTick _ = say "Got Tick"
+letterHandler :: Letter -> Process (ProcessAction ())
+letterHandler letter =
+  case message letter of
+    Tick -> return $ handleTick
+
+handleTick :: ProcessAction ()
+handleTick = lift $ say "Got Tick"
 
 main :: IO ()
 main = do

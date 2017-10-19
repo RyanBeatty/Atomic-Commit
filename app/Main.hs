@@ -36,8 +36,7 @@ data ServerState = ServerState
 
 -- Messages that servers will send and receive.
 data Message =
-    Message
-  | Tick -- A Tick message will be sent by the ticker process to its parent process for timeouts.
+    Tick -- A Tick message will be sent by the ticker process to its parent process for timeouts.
   deriving (Show, Generic, Typeable)
 instance Binary Message
 
@@ -107,14 +106,18 @@ spawnTicker parent_pid = spawnLocal $ forever $ do
 
 runServer :: ProcessAction ()
 runServer = do
+  -- Block and wait for a new Letter to arrive and then run the action
+  -- Returned by the letter handler.
   action <- lift $ receiveWait [match (letterHandler)]
-  () <- action
+  action
   runServer
 
+-- Will match on the message field in the received Letter and return a handler function
+-- should be run in the ProcessAction monad.
 letterHandler :: Letter -> Process (ProcessAction ())
 letterHandler letter =
   case message letter of
-    Tick -> return $ handleTick
+    Tick    -> return $ handleTick 
 
 handleTick :: ProcessAction ()
 handleTick = lift $ say "Got Tick"

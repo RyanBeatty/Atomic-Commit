@@ -9,7 +9,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
-  ask, tell, get, runRWST, lift)
+  ask, tell, get, runRWST, lift, listen)
 import Control.Distributed.Process (
   Process, ProcessId, send, say, expect, receiveWait,
   getSelfPid, spawnLocal, liftIO, die, link, match)
@@ -109,7 +109,7 @@ runServer = do
   -- Block and wait for a new Letter to arrive and then run the action
   -- Returned by the letter handler.
   action <- lift $ receiveWait [match (letterHandler)]
-  action
+  ((), letters_to_send) <- listen action
   runServer
 
 -- Will match on the message field in the received Letter and return a handler function

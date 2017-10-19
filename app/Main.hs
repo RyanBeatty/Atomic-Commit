@@ -8,8 +8,8 @@ import Lib
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
-  RWST, MonadReader, MonadWriter, MonadState,
-  ask, tell, get, runRWST)
+  RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
+  ask, tell, get, runRWST, lift)
 import Control.Distributed.Process (
   Process, ProcessId, send, say, expect,
   getSelfPid, spawnLocal, liftIO, die, link)
@@ -46,7 +46,7 @@ data Message = Message
 newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Message] ServerState m a }
   deriving (
     Functor, Applicative, Monad, MonadReader ServerConfig,
-    MonadWriter [Message], MonadState ServerState)
+    MonadWriter [Message], MonadState ServerState, MonadTrans)
 
 type ProcessAction a = ServerAction Process a
 
@@ -62,7 +62,7 @@ runController = forever $ do
   case cmd of
     -- Terminate the controller immeadiately. This should also kill any linked processes.
     "quit"  -> die ("Quiting Controller..." :: String)
-    "spawn master" -> spawnServers 3
+    "spawn" -> spawnServers 1
     -- User entered in an invalid command.
     _       -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
 
@@ -99,7 +99,10 @@ spawnTicker parent_pid = spawnLocal $ forever $ do
   liftIO $ threadDelay (10^6)
 
 runServer :: ProcessAction ()
-runServer = undefined
+runServer = do
+  tick <- lift $ (expect :: Process Tick)
+  lift $ say "Got tick"
+  runServer
 
 main :: IO ()
 main = do

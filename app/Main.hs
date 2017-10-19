@@ -24,9 +24,10 @@ import System.IO (hSetBuffering, stdout, BufferMode(..))
 
 -- Static config of the server.
 data ServerConfig = ServerConfig
-  { myId  :: ProcessId   -- The proccess id of this server.
-  , peers :: [ProcessId] -- List of pids of peer processes that this process can communicate with.
-                         -- Should not include pid of this process.
+  { myId  :: ProcessId      -- The proccess id of this server.
+  , peers :: [ProcessId]    -- List of pids of peer processes that this process can communicate with.
+                            -- Should not include pid of this process.
+  , controller :: ProcessId -- The pid of the controller process.
   }
   deriving (Show)
 
@@ -74,8 +75,9 @@ runController = forever $ do
 
 spawnServers :: Int -> Process ()
 spawnServers num_servers = do
+  my_pid <- getSelfPid
   -- Spawn |num_servers| number of servers and get all of the pids of the servers.
-  pids <- replicateM num_servers spawnServer
+  pids <- replicateM num_servers (spawnServer my_pid)
   -- Link all of the spawned servers to this process so that they will all exit when
   -- the controller exits.
   mapM_ link pids
@@ -83,8 +85,8 @@ spawnServers num_servers = do
   mapM_ (`send` pids) pids
 
 -- Spawn server processes. They will get the list of their peers and then start serving.
-spawnServer :: Process (ProcessId)
-spawnServer = do
+spawnServer :: ProcessId -> Process (ProcessId)
+spawnServer controller = do
   spawnLocal $ do
     my_pid <- getSelfPid
     say $ "Spawned process: " ++ (show my_pid)
@@ -94,7 +96,7 @@ spawnServer = do
     -- that is will shutdown when this process terminates.
     ticker_pid <- spawnTicker my_pid
     link ticker_pid
-    runRWST (runAction runServer) (ServerConfig my_pid peers) newServerState
+    runRWST (runAction runServer) (ServerConfig my_pid peers controller) newServerState
     return ()
 
 -- Create a ticker process that will periodically send ticks to

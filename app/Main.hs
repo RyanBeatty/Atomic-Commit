@@ -11,8 +11,8 @@ import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
   ask, tell, get, runRWST, lift)
 import Control.Distributed.Process (
-  Process, ProcessId, send, say, expect,
-  getSelfPid, spawnLocal, liftIO, die, link)
+  Process, ProcessId, send, say, expect, receiveWait,
+  getSelfPid, spawnLocal, liftIO, die, link, match)
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
 import Data.Binary (Binary)
 import qualified Data.Text as T (pack, strip, append)
@@ -100,9 +100,13 @@ spawnTicker parent_pid = spawnLocal $ forever $ do
 
 runServer :: ProcessAction ()
 runServer = do
-  tick <- lift $ (expect :: Process Tick)
-  lift $ say "Got tick"
+  () <- lift $ receiveWait [
+      match (handleTick)
+    ]
   runServer
+
+handleTick :: Tick -> Process ()
+handleTick _ = say "Got Tick"
 
 main :: IO ()
 main = do

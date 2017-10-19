@@ -25,8 +25,8 @@ import System.IO (hSetBuffering, stdout, BufferMode(..))
 -- Static config of the server.
 data ServerConfig = ServerConfig
   { myId  :: ProcessId      -- The proccess id of this server.
-  , peers :: [ProcessId]    -- List of pids of peer processes that this process can communicate with.
-                            -- Should not include pid of this process.
+  , peers :: [ProcessId]    -- List of pids of peer processes that this process can communicate
+                            -- with. Should not include pid of this process.
   , controller :: ProcessId -- The pid of the controller process.
   }
   deriving (Show)
@@ -37,7 +37,10 @@ data ServerState = ServerState
 
 -- Messages that servers will send and receive.
 data Message =
-    Tick -- A Tick message will be sent by the ticker process to its parent process for timeouts.
+    Tick           -- A Tick message will be sent by the ticker process to its parent process for
+                   -- timeouts.
+  | InitiateCommit -- Tell a server that it should become the controller of a commit and start the
+                   -- commit process.
   deriving (Show, Generic, Typeable)
 instance Binary Message
 

@@ -91,6 +91,8 @@ spawnServers num_servers = do
   mapM_ (`send` pids) pids
 
 -- Spawn server processes. They will get the list of their peers and then start serving.
+-- Servers should know the pid of the controller process, so that they can respond to
+-- requests from the controller.
 spawnServer :: ProcessId -> Process (ProcessId)
 spawnServer controller = do
   spawnLocal $ do
@@ -131,9 +133,9 @@ runServer = do
 letterHandler :: Letter -> Process (ProcessAction ())
 letterHandler letter =
   case message letter of
-    Tick           -> return $ handleTick
-    InitiateCommit -> return $ handleInitiateCommit
-    VoteRequest    -> return $ handleVoteRequest (senderOf letter)
+    Tick           -> return handleTick
+    InitiateCommit -> return handleInitiateCommit
+    VoteRequest    -> return . handleVoteRequest . senderOf $ letter
 
 handleTick :: ProcessAction ()
 handleTick = lift $ say "Got Tick"

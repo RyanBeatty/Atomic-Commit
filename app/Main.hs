@@ -41,6 +41,8 @@ data Message =
                    -- timeouts.
   | InitiateCommit -- Tell a server that it should become the controller of a commit and start the
                    -- commit process.
+  | VoteRequest    -- Vote requests are sent by the commit controller to participants. Participants
+                   -- should return a vote to the controller.
   deriving (Show, Generic, Typeable)
 instance Binary Message
 
@@ -131,13 +133,21 @@ letterHandler letter =
   case message letter of
     Tick           -> return $ handleTick
     InitiateCommit -> return $ handleInitiateCommit
+    VoteRequest    -> return $ handleVoteRequest (senderOf letter)
 
 handleTick :: ProcessAction ()
 handleTick = lift $ say "Got Tick"
 
+-- Assume the role of commit coordinator and start the commit. Send a VoteRequest message to all
+-- participants of the commit.
 handleInitiateCommit :: ProcessAction ()
-handleInitiateCommit = undefined
+handleInitiateCommit = do
+  config <- ask
+  tell $ map (\pid -> Letter (myId config) pid VoteRequest) (peers config)
 
+handleVoteRequest :: ProcessId -> ProcessAction ()
+handleVoteRequest coordinator = undefined
+ 
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering

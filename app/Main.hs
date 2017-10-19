@@ -43,10 +43,17 @@ data ServerState = ServerState
 data Message = Message
   deriving (Show)
 
-newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Message] ServerState m a }
+data Letter = Letter
+  { senderOf    :: ProcessId
+  , recipientOf :: ProcessId
+  , message     :: Message
+  }
+  deriving (Show)
+
+newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Letter] ServerState m a }
   deriving (
     Functor, Applicative, Monad, MonadReader ServerConfig,
-    MonadWriter [Message], MonadState ServerState, MonadTrans)
+    MonadWriter [Letter], MonadState ServerState, MonadTrans)
 
 type ProcessAction a = ServerAction Process a
 

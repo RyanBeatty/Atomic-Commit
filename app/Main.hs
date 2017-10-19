@@ -109,7 +109,10 @@ runServer = do
   -- Block and wait for a new Letter to arrive and then run the action
   -- Returned by the letter handler.
   action <- lift $ receiveWait [match (letterHandler)]
+  -- Run the server action and get the list of output letters we should send.
   ((), letters_to_send) <- listen action
+  -- Send all of the letters to their destinations.
+  lift $ mapM_ (\letter -> send (recipientOf letter) letter) letters_to_send
   runServer
 
 -- Will match on the message field in the received Letter and return a handler function

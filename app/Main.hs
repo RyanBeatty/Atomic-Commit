@@ -40,10 +40,11 @@ data Message =
   deriving (Show, Generic, Typeable)
 instance Binary Message
 
+-- A Letter contains the process id of the sender and recipient as well as a message payload.
 data Letter = Letter
-  { senderOf    :: ProcessId
-  , recipientOf :: ProcessId
-  , message     :: Message
+  { senderOf    :: ProcessId -- Pid of the process that sent this letter.
+  , recipientOf :: ProcessId -- Pid of the process that should receive this letter.
+  , message     :: Message   -- Message payload.
   }
   deriving (Show, Generic, Typeable)
 instance Binary Letter
@@ -104,15 +105,17 @@ spawnTicker parent_pid = spawnLocal $ forever $ do
   send parent_pid (Letter my_pid parent_pid Tick)
   liftIO $ threadDelay (10^6)
 
+-- Run the event loop of the Server. Do a blocking wait for incoming letters,
+-- run the apprioprate action for the letter, and then send all outgoing letters.
 runServer :: ProcessAction ()
 runServer = do
   -- Block and wait for a new Letter to arrive and then run the action
   -- Returned by the letter handler.
   action <- lift $ receiveWait [match (letterHandler)]
   -- Run the server action and get the list of output letters we should send.
-  ((), letters_to_send) <- listen action
+  ((), outgoing_letters) <- listen action
   -- Send all of the letters to their destinations.
-  lift $ mapM_ (\letter -> send (recipientOf letter) letter) letters_to_send
+  lift $ mapM_ (\letter -> send (recipientOf letter) letter) outgoing_letters
   runServer
 
 -- Will match on the message field in the received Letter and return a handler function

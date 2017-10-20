@@ -14,7 +14,6 @@ import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
   ask, tell, get, runRWST, lift, listen)
-import Control.Monad.State.Lazy (StateT, evalStateT)
 import Data.Binary (Binary)
 import qualified Data.Text as T (pack, strip, append)
 import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
@@ -28,8 +27,6 @@ data ControllerState = ControllerState
   { servers :: [ProcessId] -- List of all of the process ids of the servers it has spawned.
   }
   deriving (Show)
-
-type ControllerAction a = StateT ControllerState Process a
 
 -- Static config of the server.
 data ServerConfig = ServerConfig
@@ -81,19 +78,20 @@ newServerState = ServerState
 
 -- Command-loop of the Controller process. Will poll stdinput for commands
 -- issued by the user until told to quit.
-runController :: ControllerAction ()
-runController = lift $ forever $ do
+runController :: ControllerState -> Process ()
+runController state = do
   liftIO $ TIO.putStr "Enter Command: "
   cmd <- liftIO $ TIO.getLine >>= return . T.strip
-  case cmd of
+  new_state <- case cmd of
     -- Terminate the controller immeadiately. This should also kill any linked processes.
-    "quit"  -> die ("Quiting Controller..." :: String)
+    "quit"  -> die ("Quiting Controller..." :: String) >> return state
     -- Spawn and setup all of the servers.
-    "spawn" -> spawnServers 1
+    "spawn" -> spawnServers 1 >>= return . ControllerState
     -- User entered in an invalid command.
-    _       -> liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd
+    _       -> (liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd) >> return state
+  runController new_state
 
-spawnServers :: Int -> Process ()
+spawnServers :: Int -> Process [ProcessId]
 spawnServers num_servers = do
   my_pid <- getSelfPid
   -- Spawn |num_servers| number of servers and get all of the pids of the servers.
@@ -103,6 +101,7 @@ spawnServers num_servers = do
   mapM_ link pids
   -- Send the list of peers to every process that was spawned.
   mapM_ (`send` pids) pids
+  return pids
 
 -- Spawn server processes. They will get the list of their peers and then start serving.
 -- Servers should know the pid of the controller process, so that they can respond to
@@ -169,4 +168,4 @@ main = do
   hSetBuffering stdout NoBuffering
   Right t <- createTransport "127.0.0.1" "8080" defaultTCPParameters
   node <- newLocalNode t initRemoteTable
-  runProcess node (evalStateT runController $ newControllerState)
+  runProcess node (runController newControllerState)

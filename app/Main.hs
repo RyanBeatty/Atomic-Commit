@@ -85,7 +85,7 @@ runController state = do
   new_state <- case cmd of
     -- Terminate the controller immeadiately. This should also kill any linked processes.
     "quit"  -> die ("Quiting Controller..." :: String) >> return state
-    -- Spawn and setup all of the servers.
+    -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
     "spawn" -> spawnServers 1 >>= return . ControllerState
     -- User entered in an invalid command.
     _       -> (liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd) >> return state

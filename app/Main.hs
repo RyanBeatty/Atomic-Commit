@@ -6,14 +6,15 @@ module Main where
 import Lib
 
 import Control.Concurrent (threadDelay)
-import Control.Monad (forever, mapM_, replicateM, sequence)
-import Control.Monad.RWS.Lazy (
-  RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
-  ask, tell, get, runRWST, lift, listen)
 import Control.Distributed.Process (
   Process, ProcessId, send, say, expect, receiveWait,
   getSelfPid, spawnLocal, liftIO, die, link, match)
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
+import Control.Monad (forever, mapM_, replicateM, sequence)
+import Control.Monad.RWS.Lazy (
+  RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
+  ask, tell, get, runRWST, lift, listen)
+import Control.Monad.State.Lazy (StateT, evalStateT)
 import Data.Binary (Binary)
 import qualified Data.Text as T (pack, strip, append)
 import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
@@ -21,6 +22,13 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
+
+data ControllerState = ControllerState
+  { servers :: [ProcessId]
+  }
+  deriving (Show)
+
+type ControllerAction a = StateT ControllerState Process a
 
 -- Static config of the server.
 data ServerConfig = ServerConfig
@@ -62,13 +70,16 @@ newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Letter
 
 type ProcessAction a = ServerAction Process a
 
+newControllerState :: ControllerState
+newControllerState = ControllerState mempty
+
 newServerState :: ServerState
 newServerState = ServerState
 
--- Event-loop of the Controller process. Will poll stdinput for commands
+-- Command-loop of the Controller process. Will poll stdinput for commands
 -- issued by the user until told to quit.
-runController :: Process ()
-runController = forever $ do
+runController :: ControllerAction ()
+runController = lift $ forever $ do
   liftIO $ TIO.putStr "Enter Command: "
   cmd <- liftIO $ TIO.getLine >>= return . T.strip
   case cmd of
@@ -155,4 +166,4 @@ main = do
   hSetBuffering stdout NoBuffering
   Right t <- createTransport "127.0.0.1" "8080" defaultTCPParameters
   node <- newLocalNode t initRemoteTable
-  runProcess node runController
+  runProcess node (evalStateT runController $ newControllerState)

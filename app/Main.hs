@@ -88,7 +88,7 @@ runController state = do
     -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
     "spawn" -> spawnServers 1 >>= return . ControllerState
     -- User entered in an invalid command.
-    _       -> (liftIO $ TIO.putStrLn $ "Invalid Command: " `T.append` cmd) >> return state
+    _       -> (liftIO . TIO.putStrLn $ "Invalid Command: " `T.append` cmd) >> return state
   runController new_state
 
 spawnServers :: Int -> Process [ProcessId]

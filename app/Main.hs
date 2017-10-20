@@ -23,8 +23,9 @@ import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
 
+-- Mutable state of the controller process.
 data ControllerState = ControllerState
-  { servers :: [ProcessId]
+  { servers :: [ProcessId] -- List of all of the process ids of the servers it has spawned.
   }
   deriving (Show)
 
@@ -63,6 +64,8 @@ data Letter = Letter
   deriving (Show, Generic, Typeable)
 instance Binary Letter
 
+-- A ServerAction has a ServerConfig as static data, writes Letters to be sent, and has ServerState
+-- as mutable state.
 newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Letter] ServerState m a }
   deriving (
     Functor, Applicative, Monad, MonadReader ServerConfig,

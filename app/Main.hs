@@ -68,7 +68,7 @@ newtype ServerAction m a = ServerAction { runAction :: RWST ServerConfig [Letter
     Functor, Applicative, Monad, MonadReader ServerConfig,
     MonadWriter [Letter], MonadState ServerState, MonadTrans)
 
-type ProcessAction a = ServerAction Process a
+type ServerProcess a = ServerAction Process a
 
 newControllerState :: ControllerState
 newControllerState = ControllerState mempty
@@ -130,7 +130,7 @@ spawnTicker parent_pid = spawnLocal $ forever $ do
 
 -- Run the event loop of the Server. Do a blocking wait for incoming letters,
 -- run the apprioprate action for the letter, and then send all outgoing letters.
-runServer :: ProcessAction ()
+runServer :: ServerProcess ()
 runServer = do
   -- Block and wait for a new Letter to arrive and then run the action
   -- Returned by the letter handler.
@@ -142,25 +142,25 @@ runServer = do
   runServer
 
 -- Will match on the message field in the received Letter and return a handler function
--- should be run in the ProcessAction monad.
-letterHandler :: Letter -> Process (ProcessAction ())
+-- should be run in the ServerProcess monad.
+letterHandler :: Letter -> Process (ServerProcess ())
 letterHandler letter =
   case message letter of
     Tick           -> return handleTick
     InitiateCommit -> return handleInitiateCommit
     VoteRequest    -> return . handleVoteRequest . senderOf $ letter
 
-handleTick :: ProcessAction ()
+handleTick :: ServerProcess ()
 handleTick = lift $ say "Got Tick"
 
 -- Assume the role of commit coordinator and start the commit. Send a VoteRequest message to all
 -- participants of the commit.
-handleInitiateCommit :: ProcessAction ()
+handleInitiateCommit :: ServerProcess ()
 handleInitiateCommit = do
   config <- ask
   tell $ map (\pid -> Letter (myId config) pid VoteRequest) (peers config)
 
-handleVoteRequest :: ProcessId -> ProcessAction ()
+handleVoteRequest :: ProcessId -> ServerProcess ()
 handleVoteRequest coordinator = undefined
  
 main :: IO ()

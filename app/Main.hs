@@ -11,13 +11,13 @@ import Control.Distributed.Process (
   Process, ProcessId, send, say, expect, receiveWait,
   getSelfPid, spawnLocal, liftIO, die, link, match)
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
-import Control.Lens (makeLenses, set)
+import Control.Lens (makeLenses, set, over)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
   ask, tell, get, runRWST, lift, listen, modify)
 import Data.Binary (Binary)
-import qualified Data.Map.Strict as Map (Map, fromList)
+import qualified Data.Map.Strict as Map (Map, fromList, map)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
@@ -98,6 +98,10 @@ runController state = do
     "quit"  -> die ("Quiting Controller..." :: String) >> return state
     -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
     "spawn" -> spawnServers 1 >>= return . ControllerState
+    ('c':'o':'m':'m':'i':'t':index) -> getSelfPid >>= \pid ->
+                                       let commiter = servers state !! (read index :: Int)
+                                       in send commiter (Letter pid commiter InitiateCommit) >>
+                                       return state
     -- User entered in an invalid command.
     _       -> (liftIO . putStrLn $ "Invalid Command: " ++ cmd) >> return state
   runController new_state
@@ -162,7 +166,9 @@ letterHandler letter =
     VoteRequest    -> return . handleVoteRequest . senderOf $ letter
 
 handleTick :: ServerProcess ()
-handleTick = lift $ say "Got Tick"
+handleTick = do
+  lift $ say "Got Tick"
+  modify (over timeoutMap (Map.map pred))
 
 -- Assume the role of commit coordinator and start the commit. Send a VoteRequest message to all
 -- participants of the commit.
@@ -176,7 +182,7 @@ handleInitiateCommit = do
   modify $ set timeoutMap (Map.fromList ps)
 
 handleVoteRequest :: ProcessId -> ServerProcess ()
-handleVoteRequest coordinator = undefined
+handleVoteRequest coordinator = lift $ say "Got vote request from "
  
 main :: IO ()
 main = do

@@ -4,7 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Main where
 
-import Lib
+import Lib (trim)
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process (
@@ -18,8 +18,6 @@ import Control.Monad.RWS.Lazy (
   ask, tell, get, runRWST, lift, listen, modify)
 import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map (Map, fromList)
-import qualified Data.Text as T (pack, strip, append)
-import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
@@ -93,15 +91,15 @@ timeout = 10
 -- issued by the user until told to quit.
 runController :: ControllerState -> Process ()
 runController state = do
-  liftIO $ TIO.putStr "Enter Command: "
-  cmd <- liftIO $ TIO.getLine >>= return . T.strip
+  liftIO $ putStr "Enter Command: "
+  cmd <- liftIO $ getLine >>= return . trim
   new_state <- case cmd of
     -- Terminate the controller immeadiately. This should also kill any linked processes.
     "quit"  -> die ("Quiting Controller..." :: String) >> return state
     -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
     "spawn" -> spawnServers 1 >>= return . ControllerState
     -- User entered in an invalid command.
-    _       -> (liftIO . TIO.putStrLn $ "Invalid Command: " `T.append` cmd) >> return state
+    _       -> (liftIO . putStrLn $ "Invalid Command: " ++ cmd) >> return state
   runController new_state
 
 spawnServers :: Int -> Process [ProcessId]

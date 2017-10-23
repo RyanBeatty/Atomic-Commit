@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-} -- Allows automatic derivation of e.g. Monad
 {-# LANGUAGE DeriveGeneric              #-} -- Allows Generic, for auto-generation of serialization code
+{-# LANGUAGE TemplateHaskell #-}
 module Main where
 
 import Lib
@@ -10,11 +11,13 @@ import Control.Distributed.Process (
   Process, ProcessId, send, say, expect, receiveWait,
   getSelfPid, spawnLocal, liftIO, die, link, match)
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
+import Control.Lens (makeLenses, set)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
-  ask, tell, get, runRWST, lift, listen)
+  ask, tell, get, runRWST, lift, listen, modify)
 import Data.Binary (Binary)
+import qualified Data.Map.Strict as Map (Map, fromList)
 import qualified Data.Text as T (pack, strip, append)
 import qualified Data.Text.IO as TIO (getLine, putStr, putStrLn)
 import Data.Typeable (Typeable)
@@ -39,7 +42,13 @@ data ServerConfig = ServerConfig
 
 -- Mutable state of a server.
 data ServerState = ServerState
+  { _timeoutMap :: Map.Map ProcessId Integer -- Keeps track of timeout values for responses we are
+                                        -- expecting from other processes. Everytime a tick happens
+                                        -- the timeout count should be decremented for each
+                                        -- expected response.
+  }
   deriving (Show)
+makeLenses ''ServerState
 
 -- Messages that servers will send and receive.
 data Message =
@@ -74,7 +83,11 @@ newControllerState :: ControllerState
 newControllerState = ControllerState mempty
 
 newServerState :: ServerState
-newServerState = ServerState
+newServerState = ServerState mempty
+
+-- Number of Tick messages that can pass before an expected response is marked as timing out.
+timeout :: Integer
+timeout = 10
 
 -- Command-loop of the Controller process. Will poll stdinput for commands
 -- issued by the user until told to quit.
@@ -157,8 +170,12 @@ handleTick = lift $ say "Got Tick"
 -- participants of the commit.
 handleInitiateCommit :: ServerProcess ()
 handleInitiateCommit = do
+  -- Output vote reuqest messages to send to all peers.
   config <- ask
   tell $ map (\pid -> Letter (myId config) pid VoteRequest) (peers config)
+  -- Create timeout for every peer we sent a vote request to.
+  let ps = zip (peers config) (repeat timeout)
+  modify $ set timeoutMap (Map.fromList ps)
 
 handleVoteRequest :: ProcessId -> ServerProcess ()
 handleVoteRequest coordinator = undefined

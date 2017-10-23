@@ -26,7 +26,9 @@ executable Atomic-Commit-exe
   build-depends:       base
                      , Atomic-Commit
                      , binary
+                     , containers
                      , distributed-process
+                     , lens
                      , mtl
                      , network-transport-tcp
                      , text

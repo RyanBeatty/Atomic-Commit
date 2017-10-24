@@ -176,7 +176,11 @@ spawnTicker :: ProcessId -> Process ProcessId
 spawnTicker parent_pid = spawnLocal $ forever $ do
   my_pid <- getSelfPid
   send parent_pid (Letter my_pid parent_pid Tick)
-  liftIO $ threadDelay (10^6)
+  liftIO $ threadDelay tickerDelay
+
+-- Time the ticker process should wait between sending ticks.
+tickerDelay :: Int
+tickerDelay = 10^6
 
 -- Run the event loop of the Server. Do a blocking wait for incoming letters,
 -- run the apprioprate action for the letter, and then send all outgoing letters.
@@ -204,7 +208,7 @@ letterHandler letter =
 
 handleTick :: ServerProcess ()
 handleTick = do
-  modify (over timeoutMap (Map.map pred))
+  modify . over timeoutMap $ Map.map pred
   -- TODO: Implement timeout logic
 
 -- Assume the role of commit coordinator and start the commit. Send a VoteRequest message to all

@@ -11,11 +11,11 @@ import Control.Distributed.Process (
   Process, ProcessId, send, say, expect, receiveWait,
   getSelfPid, spawnLocal, liftIO, die, link, match)
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
-import Control.Lens (makeLenses, set, over)
+import Control.Lens (makeLenses, set, over, view)
 import Control.Monad (forever, mapM_, replicateM, sequence)
 import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
-  ask, tell, get, runRWST, lift, listen, modify)
+  ask, tell, get, runRWST, lift, listen, modify, gets, asks)
 import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map (Map, fromList, map)
 import Data.Typeable (Typeable)
@@ -40,7 +40,7 @@ data ServerConfig = ServerConfig
 
 -- A vote is either to commit the transaction or to abort it.
 data Vote = Commit | Abort
-  deriving (Show, Generic, Typeable)
+  deriving (Show, Eq, Generic, Typeable)
 instance Binary Vote
 
 -- Mutable state of a server.
@@ -50,6 +50,7 @@ data ServerState = ServerState
                                              -- the timeout count should be decremented for each
                                              -- expected response.
   , _votes :: [(ProcessId, Vote)] -- List of which process voted which way.
+  , _myNextVote :: Vote -- Vote for this processes' next vote request.
   }
   deriving (Show)
 makeLenses ''ServerState
@@ -64,6 +65,8 @@ data Message =
                        -- should return a vote to the controller.
   | VoteResponse       -- Vote responses contain a process vote on whether to commit the current transaction.
       { vote :: Vote }
+  | CommitMessage
+  | AbortMessage
   deriving (Show, Generic, Typeable)
 instance Binary Message
 
@@ -71,6 +74,7 @@ instance Binary Message
 data DTLogMessage =
     StartCommit
   | CommitRecord
+  | AbortRecord
   deriving (Show)
 
 -- A Letter contains the process id of the sender and recipient as well as a message payload.
@@ -95,7 +99,7 @@ newControllerState :: ControllerState
 newControllerState = ControllerState mempty
 
 newServerState :: ServerState
-newServerState = ServerState mempty mempty
+newServerState = ServerState mempty mempty Commit
 
 -- Number of Tick messages that can pass before an expected response is marked as timing out.
 timeout :: Integer
@@ -195,18 +199,35 @@ handleInitiateCommit = do
   let ps = zip (peers config) (repeat timeout)
   modify $ set timeoutMap (Map.fromList ps)
   -- Write the start commit record to the transaction log.
-  lift . liftIO $ writeDTLogMessage StartCommit
+  writeDTLogMessage StartCommit
 
 handleVoteRequest :: ProcessId -> ServerProcess ()
 handleVoteRequest coordinator = lift $ say "Got vote request"
 
 handleVoteResponse :: ProcessId -> Vote -> ServerProcess ()
 handleVoteResponse voter vote = do
+  -- Add this voter + vote to list of votes.
   modify $ over votes (++ [(voter, vote)])
-  -- TODO: handle logic for if all vote requests have been received.
+  -- Check if all voters have voted.
+  voted <- gets (view votes)
+  config <- ask
+  if map fst voted == peers config
+    then do
+      my_vote <- gets (view myNextVote)
+      if all (== Commit) (map snd voted) && my_vote == Commit
+        then do
+          -- send commit message to all processes.
+          writeDTLogMessage CommitRecord
+          tell $ map (\pid -> Letter (myId config) pid CommitMessage) (peers config)
+        else do
+          -- Send abort message to all processes that voted commit.
+          writeDTLogMessage AbortRecord
+          let (voted_commit, _) = unzip $ filter ((==) Commit . snd) voted
+          tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
+    else return ()
 
-writeDTLogMessage :: DTLogMessage -> IO ()
-writeDTLogMessage message = undefined
+writeDTLogMessage :: DTLogMessage -> ServerProcess ()
+writeDTLogMessage message = lift . liftIO $ undefined
  
 main :: IO ()
 main = do

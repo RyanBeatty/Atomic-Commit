@@ -48,16 +48,29 @@ data ServerState = ServerState
   deriving (Show)
 makeLenses ''ServerState
 
+-- A vote is either to commit the transaction or to abort it.
+data Vote = Commit | Abort
+  deriving (Show, Generic, Typeable)
+instance Binary Vote
+
 -- Messages that servers will send and receive.
 data Message =
-    Tick           -- A Tick message will be sent by the ticker process to its parent process for
-                   -- timeouts.
-  | InitiateCommit -- Tell a server that it should become the controller of a commit and start the
-                   -- commit process.
-  | VoteRequest    -- Vote requests are sent by the commit controller to participants. Participants
-                   -- should return a vote to the controller.
+    Tick               -- A Tick message will be sent by the ticker process to its parent process for
+                       -- timeouts.
+  | InitiateCommit     -- Tell a server that it should become the controller of a commit and start the
+                       -- commit process.
+  | VoteRequest        -- Vote requests are sent by the commit controller to participants. Participants
+                       -- should return a vote to the controller.
+  | VoteResponse       -- Vote responses contain a process vote on whether to commit the current transaction.
+      { vote :: Vote }
   deriving (Show, Generic, Typeable)
 instance Binary Message
+
+-- A log message to be written to the distributed transaction log.
+data DTLogMessage =
+    StartCommit
+  | CommitRecord
+  deriving (Show)
 
 -- A Letter contains the process id of the sender and recipient as well as a message payload.
 data Letter = Letter
@@ -180,9 +193,17 @@ handleInitiateCommit = do
   -- Create timeout for every peer we sent a vote request to.
   let ps = zip (peers config) (repeat timeout)
   modify $ set timeoutMap (Map.fromList ps)
+  -- Write the start commit record to the transaction log.
+  lift . liftIO $ writeDTLogMessage StartCommit
 
 handleVoteRequest :: ProcessId -> ServerProcess ()
 handleVoteRequest coordinator = lift $ say "Got vote request"
+
+handleVoteResponse :: ProcessId -> Vote -> ServerProcess ()
+handleVoteResponse voter vote = undefined
+
+writeDTLogMessage :: DTLogMessage -> IO ()
+writeDTLogMessage message = undefined
  
 main :: IO ()
 main = do

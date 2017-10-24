@@ -179,9 +179,10 @@ runServer = do
 letterHandler :: Letter -> Process (ServerProcess ())
 letterHandler letter =
   case message letter of
-    Tick           -> return handleTick
-    InitiateCommit -> return handleInitiateCommit
-    VoteRequest    -> return . handleVoteRequest . senderOf $ letter
+    Tick                        -> return handleTick
+    InitiateCommit              -> return handleInitiateCommit
+    VoteRequest                 -> return . handleVoteRequest . senderOf $ letter
+    VoteResponse { vote=vote }  -> return $ handleVoteResponse (senderOf letter) vote
 
 handleTick :: ServerProcess ()
 handleTick = do

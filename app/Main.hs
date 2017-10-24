@@ -61,6 +61,8 @@ data Message =
                        -- timeouts.
   | InitiateCommit     -- Tell a server that it should become the controller of a commit and start the
                        -- commit process.
+  | VoteChange
+    { newVote :: Vote }
   | VoteRequest        -- Vote requests are sent by the commit controller to participants. Participants
                        -- should return a vote to the controller.
   | VoteResponse       -- Vote responses contain a process vote on whether to commit the current transaction.
@@ -116,13 +118,22 @@ runController state = do
     "quit"  -> die ("Quiting Controller..." :: String) >> return state
     -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
     "spawn" -> spawnServers 2 >>= return . ControllerState
-    ('c':'o':'m':'m':'i':'t':index) -> getSelfPid >>= \pid ->
-                                       let commiter = servers state !! (read index :: Int)
-                                       in send commiter (Letter pid commiter InitiateCommit) >>
-                                       return state
+    ('c':'o':'m':'m':'i':'t':index) -> sendInititateCommit (servers state !! (read index :: Int)) >> return state
+    ('c':'h':'a':'n':'g':'e':'c':'o':'m':'m':'i':'t':index) -> sendVoteChange (servers state !! (read index :: Int)) Commit >> return state
+    ('c':'h':'a':'n':'g':'e':'a':'b':'o':'r':'t':index)     -> sendVoteChange (servers state !! (read index :: Int)) Abort >> return state
     -- User entered in an invalid command.
     _       -> (liftIO . putStrLn $ "Invalid Command: " ++ cmd) >> return state
   runController new_state
+
+sendInititateCommit :: ProcessId -> Process ()
+sendInititateCommit coordinator = do
+  my_pid <- getSelfPid
+  send coordinator (Letter my_pid coordinator InitiateCommit)
+
+sendVoteChange :: ProcessId -> Vote -> Process ()
+sendVoteChange pid vote = do
+  my_pid <- getSelfPid
+  send pid (Letter my_pid pid (VoteChange vote))
 
 spawnServers :: Int -> Process [ProcessId]
 spawnServers num_servers = do
@@ -183,6 +194,7 @@ letterHandler letter =
     InitiateCommit              -> return handleInitiateCommit
     VoteRequest                 -> return . handleVoteRequest . senderOf $ letter
     VoteResponse { vote=vote }  -> return $ handleVoteResponse (senderOf letter) vote
+    VoteChange { newVote=new_vote }    -> return $ handleVoteChange new_vote 
 
 handleTick :: ServerProcess ()
 handleTick = do
@@ -226,6 +238,9 @@ handleVoteResponse voter vote = do
           let (voted_commit, _) = unzip $ filter ((==) Commit . snd) voted
           tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
     else return ()
+
+handleVoteChange :: Vote -> ServerProcess ()
+handleVoteChange new_vote = modify (set myNextVote new_vote)
 
 writeDTLogMessage :: DTLogMessage -> ServerProcess ()
 writeDTLogMessage message = lift . liftIO $ undefined

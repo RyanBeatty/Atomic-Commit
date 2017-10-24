@@ -121,9 +121,11 @@ runController state = do
     -- Initiate the atomic commit protocol with the chosen process as coordinator.
     ('c':'o':'m':'m':'i':'t':index) -> sendInititateCommit (servers state !! (read index :: Int)) >> return state
     -- Tell the chosen process to change their next vote to be commit.
-    ('c':'h':'a':'n':'g':'e':'c':'o':'m':'m':'i':'t':index) -> sendVoteChange (servers state !! (read index :: Int)) Commit >> return state
+    ('c':'h':'a':'n':'g':'e':'c':'o':'m':'m':'i':'t':index) ->
+      sendVoteChange (servers state !! (read index :: Int)) Commit >> return state
     -- Tell the chosen process to change their next vote to be abort.
-    ('c':'h':'a':'n':'g':'e':'a':'b':'o':'r':'t':index)     -> sendVoteChange (servers state !! (read index :: Int)) Abort >> return state
+    ('c':'h':'a':'n':'g':'e':'a':'b':'o':'r':'t':index)     ->
+      sendVoteChange (servers state !! (read index :: Int)) Abort >> return state
     -- User entered in an invalid command.
     _       -> (liftIO . putStrLn $ "Invalid Command: " ++ cmd) >> return state
   runController new_state

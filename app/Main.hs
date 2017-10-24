@@ -61,14 +61,14 @@ data Message =
                        -- timeouts.
   | InitiateCommit     -- Tell a server that it should become the controller of a commit and start the
                        -- commit process.
-  | VoteChange
+  | VoteChange         -- Tells a process that it should change its next vote.
     { newVote :: Vote }
   | VoteRequest        -- Vote requests are sent by the commit controller to participants. Participants
                        -- should return a vote to the controller.
   | VoteResponse       -- Vote responses contain a process vote on whether to commit the current transaction.
       { vote :: Vote }
-  | CommitMessage
-  | AbortMessage
+  | CommitMessage      -- Tells the process that it should commit the transaction.
+  | AbortMessage       -- Tells the process that it should abort the transaction.
   deriving (Show, Generic, Typeable)
 instance Binary Message
 
@@ -118,23 +118,29 @@ runController state = do
     "quit"  -> die ("Quiting Controller..." :: String) >> return state
     -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
     "spawn" -> spawnServers 2 >>= return . ControllerState
+    -- Initiate the atomic commit protocol with the chosen process as coordinator.
     ('c':'o':'m':'m':'i':'t':index) -> sendInititateCommit (servers state !! (read index :: Int)) >> return state
+    -- Tell the chosen process to change their next vote to be commit.
     ('c':'h':'a':'n':'g':'e':'c':'o':'m':'m':'i':'t':index) -> sendVoteChange (servers state !! (read index :: Int)) Commit >> return state
+    -- Tell the chosen process to change their next vote to be abort.
     ('c':'h':'a':'n':'g':'e':'a':'b':'o':'r':'t':index)     -> sendVoteChange (servers state !! (read index :: Int)) Abort >> return state
     -- User entered in an invalid command.
     _       -> (liftIO . putStrLn $ "Invalid Command: " ++ cmd) >> return state
   runController new_state
 
+-- Tell the chosen coordinator process to initiate the atomic commit protocol.
 sendInititateCommit :: ProcessId -> Process ()
 sendInititateCommit coordinator = do
   my_pid <- getSelfPid
   send coordinator (Letter my_pid coordinator InitiateCommit)
 
+-- Tell the chosen process to change what their next vote will be.
 sendVoteChange :: ProcessId -> Vote -> Process ()
 sendVoteChange pid vote = do
   my_pid <- getSelfPid
   send pid (Letter my_pid pid (VoteChange vote))
 
+-- Spawn all of the server processes.
 spawnServers :: Int -> Process [ProcessId]
 spawnServers num_servers = do
   my_pid <- getSelfPid
@@ -190,11 +196,11 @@ runServer = do
 letterHandler :: Letter -> Process (ServerProcess ())
 letterHandler letter =
   case message letter of
-    Tick                        -> return handleTick
-    InitiateCommit              -> return handleInitiateCommit
-    VoteRequest                 -> return . handleVoteRequest . senderOf $ letter
-    VoteResponse { vote=vote }  -> return $ handleVoteResponse (senderOf letter) vote
-    VoteChange { newVote=new_vote }    -> return $ handleVoteChange new_vote 
+    Tick                            -> return handleTick
+    InitiateCommit                  -> return handleInitiateCommit
+    VoteRequest                     -> return . handleVoteRequest . senderOf $ letter
+    VoteResponse { vote=vote }      -> return $ handleVoteResponse (senderOf letter) vote
+    VoteChange { newVote=new_vote } -> return $ handleVoteChange new_vote 
 
 handleTick :: ServerProcess ()
 handleTick = do
@@ -239,6 +245,7 @@ handleVoteResponse voter vote = do
           tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
     else return ()
 
+-- Change the next vote of the process.
 handleVoteChange :: Vote -> ServerProcess ()
 handleVoteChange new_vote = modify (set myNextVote new_vote)
 

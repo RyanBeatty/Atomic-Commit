@@ -38,20 +38,21 @@ data ServerConfig = ServerConfig
   }
   deriving (Show)
 
--- Mutable state of a server.
-data ServerState = ServerState
-  { _timeoutMap :: Map.Map ProcessId Integer -- Keeps track of timeout values for responses we are
-                                        -- expecting from other processes. Everytime a tick happens
-                                        -- the timeout count should be decremented for each
-                                        -- expected response.
-  }
-  deriving (Show)
-makeLenses ''ServerState
-
 -- A vote is either to commit the transaction or to abort it.
 data Vote = Commit | Abort
   deriving (Show, Generic, Typeable)
 instance Binary Vote
+
+-- Mutable state of a server.
+data ServerState = ServerState
+  { _timeoutMap :: Map.Map ProcessId Integer -- Keeps track of timeout values for responses we are
+                                             -- expecting from other processes. Everytime a tick happens
+                                             -- the timeout count should be decremented for each
+                                             -- expected response.
+  , _votes :: [(ProcessId, Vote)] -- List of which process voted which way.
+  }
+  deriving (Show)
+makeLenses ''ServerState
 
 -- Messages that servers will send and receive.
 data Message =
@@ -94,7 +95,7 @@ newControllerState :: ControllerState
 newControllerState = ControllerState mempty
 
 newServerState :: ServerState
-newServerState = ServerState mempty
+newServerState = ServerState mempty mempty
 
 -- Number of Tick messages that can pass before an expected response is marked as timing out.
 timeout :: Integer
@@ -181,7 +182,7 @@ letterHandler letter =
 handleTick :: ServerProcess ()
 handleTick = do
   modify (over timeoutMap (Map.map pred))
-  --TODO: Implement timeout logic
+  -- TODO: Implement timeout logic
 
 -- Assume the role of commit coordinator and start the commit. Send a VoteRequest message to all
 -- participants of the commit.
@@ -200,7 +201,9 @@ handleVoteRequest :: ProcessId -> ServerProcess ()
 handleVoteRequest coordinator = lift $ say "Got vote request"
 
 handleVoteResponse :: ProcessId -> Vote -> ServerProcess ()
-handleVoteResponse voter vote = undefined
+handleVoteResponse voter vote = do
+  modify $ over votes (++ [(voter, vote)])
+  -- TODO: handle logic for if all vote requests have been received.
 
 writeDTLogMessage :: DTLogMessage -> IO ()
 writeDTLogMessage message = undefined

@@ -117,6 +117,7 @@ runController state = do
   new_state <- commandHandler state command
   runController new_state
 
+-- Pattern matches on commands from the user and performs the corresponding action.
 commandHandler :: ControllerState -> String -> Process (ControllerState)
 commandHandler state "quit" =
   -- Terminate the controller immeadiately. This should also kill any linked processes.

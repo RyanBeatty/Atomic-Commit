@@ -12,6 +12,7 @@ import Data.List (dropWhile, dropWhileEnd, stripPrefix)
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
 
+-- Utility function to strip a prefix from a string and then trim the result.
 stripAndTrim :: String -> String -> Maybe String
 stripAndTrim prefix str = trim <$> stripPrefix prefix str
 

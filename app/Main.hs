@@ -2,9 +2,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-} -- Allows automatic derivation of e.g. Monad
 {-# LANGUAGE DeriveGeneric              #-} -- Allows Generic, for auto-generation of serialization code
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
 module Main where
 
-import Lib (trim)
+import Lib (choose, stripAndTrim)
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process (
@@ -112,23 +113,29 @@ timeout = 10
 runController :: ControllerState -> Process ()
 runController state = do
   liftIO $ putStr "Enter Command: "
-  cmd <- liftIO $ getLine >>= return . trim
-  new_state <- case cmd of
-    -- Terminate the controller immeadiately. This should also kill any linked processes.
-    "quit"  -> die ("Quiting Controller..." :: String) >> return state
-    -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
-    "spawn" -> spawnServers 2 >>= return . ControllerState
-    -- Initiate the atomic commit protocol with the chosen process as coordinator.
-    ('c':'o':'m':'m':'i':'t':index) -> sendInititateCommit (servers state !! (read index :: Int)) >> return state
-    -- Tell the chosen process to change their next vote to be commit.
-    ('c':'h':'a':'n':'g':'e':'c':'o':'m':'m':'i':'t':index) ->
-      sendVoteChange (servers state !! (read index :: Int)) Commit >> return state
-    -- Tell the chosen process to change their next vote to be abort.
-    ('c':'h':'a':'n':'g':'e':'a':'b':'o':'r':'t':index)     ->
-      sendVoteChange (servers state !! (read index :: Int)) Abort >> return state
-    -- User entered in an invalid command.
-    _       -> (liftIO . putStrLn $ "Invalid Command: " ++ cmd) >> return state
+  command <- liftIO $ getLine
+  new_state <- commandHandler state command
   runController new_state
+
+commandHandler :: ControllerState -> String -> Process (ControllerState)
+commandHandler state "quit" =
+  -- Terminate the controller immeadiately. This should also kill any linked processes.
+  die ("Quiting Controller..." :: String) >> return state
+commandHandler state "spawn" =
+  -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
+  spawnServers 2 >>= return . ControllerState
+commandHandler state (stripAndTrim "commit" -> Just index) =
+  -- Initiate the atomic commit protocol with the chosen process as coordinator.
+  sendInititateCommit (choose (servers state) index) >> return state
+commandHandler state (stripAndTrim "vote commit" -> Just index) =
+  -- Tell the chosen process to change their next vote to be commit.
+  sendVoteChange (choose (servers state) index) Commit >> return state
+commandHandler state (stripAndTrim "vote abort" -> Just index) =
+  -- Tell the chosen process to change their next vote to be abort.
+  sendVoteChange (choose (servers state) index) Abort >> return state
+commandHandler state command  =
+  -- User entered in an invalid command.
+  (liftIO . putStrLn $ "Invalid Command: " ++ command) >> return state 
 
 -- Tell the chosen coordinator process to initiate the atomic commit protocol.
 sendInititateCommit :: ProcessId -> Process ()

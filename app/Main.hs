@@ -97,7 +97,7 @@ runController state = do
     -- Terminate the controller immeadiately. This should also kill any linked processes.
     "quit"  -> die ("Quiting Controller..." :: String) >> return state
     -- Spawn and setup all of the servers. Save pids of all of the servers that were created.
-    "spawn" -> spawnServers 1 >>= return . ControllerState
+    "spawn" -> spawnServers 2 >>= return . ControllerState
     ('c':'o':'m':'m':'i':'t':index) -> getSelfPid >>= \pid ->
                                        let commiter = servers state !! (read index :: Int)
                                        in send commiter (Letter pid commiter InitiateCommit) >>
@@ -167,8 +167,8 @@ letterHandler letter =
 
 handleTick :: ServerProcess ()
 handleTick = do
-  lift $ say "Got Tick"
   modify (over timeoutMap (Map.map pred))
+  --TODO: Implement timeout logic
 
 -- Assume the role of commit coordinator and start the commit. Send a VoteRequest message to all
 -- participants of the commit.
@@ -182,7 +182,7 @@ handleInitiateCommit = do
   modify $ set timeoutMap (Map.fromList ps)
 
 handleVoteRequest :: ProcessId -> ServerProcess ()
-handleVoteRequest coordinator = lift $ say "Got vote request from "
+handleVoteRequest coordinator = lift $ say "Got vote request"
  
 main :: IO ()
 main = do

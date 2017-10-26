@@ -52,6 +52,7 @@ data ServerState = ServerState
                                              -- expected response.
   , _votes :: [(ProcessId, Vote)] -- List of which process voted which way.
   , _myNextVote :: Vote -- Vote for this processes' next vote request.
+  , _transaction :: Integer
   }
   deriving (Show)
 makeLenses ''ServerState
@@ -70,6 +71,7 @@ data Message =
       { vote :: Vote }
   | CommitMessage      -- Tells the process that it should commit the transaction.
   | AbortMessage       -- Tells the process that it should abort the transaction.
+  | Increment
   deriving (Show, Generic, Typeable)
 instance Binary Message
 
@@ -102,7 +104,7 @@ newControllerState :: ControllerState
 newControllerState = ControllerState mempty
 
 newServerState :: ServerState
-newServerState = ServerState mempty mempty Commit
+newServerState = ServerState mempty mempty Commit 0
 
 -- Number of Tick messages that can pass before an expected response is marked as timing out.
 timeout :: Integer
@@ -134,6 +136,8 @@ commandHandler state (stripAndTrim "vote commit" -> Just index) =
 commandHandler state (stripAndTrim "vote abort" -> Just index) =
   -- Tell the chosen process to change their next vote to be abort.
   sendVoteChange (choose (servers state) index) Abort >> return state
+commandHandler state (stripAndTrim "inc" -> Just index) =
+  sendIncrement (choose (servers state) index) >> return state
 commandHandler state command  =
   -- User entered in an invalid command.
   (liftIO . putStrLn $ "Invalid Command: " ++ command) >> return state 
@@ -143,6 +147,11 @@ sendInititateCommit :: ProcessId -> Process ()
 sendInititateCommit coordinator = do
   my_pid <- getSelfPid
   send coordinator (Letter my_pid coordinator InitiateCommit)
+
+sendIncrement :: ProcessId -> Process ()
+sendIncrement pid = do
+  my_pid <- getSelfPid
+  send pid (Letter my_pid pid Increment)
 
 -- Tell the chosen process to change what their next vote will be.
 sendVoteChange :: ProcessId -> Vote -> Process ()
@@ -214,7 +223,8 @@ letterHandler letter =
     InitiateCommit                  -> return handleInitiateCommit
     VoteRequest                     -> return . handleVoteRequest . senderOf $ letter
     VoteResponse { vote=vote }      -> return $ handleVoteResponse (senderOf letter) vote
-    VoteChange { newVote=new_vote } -> return $ handleVoteChange new_vote 
+    VoteChange { newVote=new_vote } -> return $ handleVoteChange new_vote
+    Increment                       -> return handleIncrement
 
 handleTick :: ServerProcess ()
 handleTick = do
@@ -262,6 +272,9 @@ handleVoteResponse voter vote = do
 -- Change the next vote of the process.
 handleVoteChange :: Vote -> ServerProcess ()
 handleVoteChange new_vote = modify (set myNextVote new_vote)
+
+handleIncrement :: ServerProcess ()
+handleIncrement = modify (over transaction succ)
 
 writeDTLogMessage :: DTLogMessage -> ServerProcess ()
 writeDTLogMessage message = lift . liftIO $ undefined

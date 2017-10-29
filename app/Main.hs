@@ -45,15 +45,17 @@ data Vote = Yes | No
   deriving (Show, Eq, Generic, Typeable)
 instance Binary Vote
 
+type TimeoutMap = Map.Map ProcessId Integer
+
 -- Mutable state of a server.
 data ServerState = ServerState
-  { _timeoutMap :: Map.Map ProcessId Integer -- Keeps track of timeout values for responses we are
-                                             -- expecting from other processes. Everytime a tick happens
-                                             -- the timeout count should be decremented for each
-                                             -- expected response.
-  , _votes :: [(ProcessId, Vote)]            -- List of which process voted which way.
-  , _myVote :: Vote                          -- Vote that this process will send when it gets vote
-                                             -- requests.
+  { _timeoutMap :: TimeoutMap     -- Keeps track of timeout values for responses we are
+                                  -- expecting from other processes. Everytime a tick happens
+                                  -- the timeout count should be decremented for each
+                                  -- expected response.
+  , _votes :: [(ProcessId, Vote)] -- List of which process voted which way.
+  , _myVote :: Vote               -- Vote that this process will send when it gets vote
+                                  -- requests.
   , _transaction :: Integer
   }
   deriving (Show)

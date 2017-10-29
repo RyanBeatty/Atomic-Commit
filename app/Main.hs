@@ -5,7 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main where
 
-import DTLog (writeStartCommit, writeCommitRecord, writeAbortRecord)
+import DTLog (writeStartCommit, writeCommitRecord, writeAbortRecord, writeYesRecord)
 import Utils (choose, stripAndTrim)
 
 import Control.Concurrent (threadDelay)
@@ -19,7 +19,7 @@ import Control.Monad.RWS.Lazy (
   RWST, MonadReader, MonadWriter, MonadState, MonadTrans,
   ask, tell, get, runRWST, lift, listen, modify, gets, asks)
 import Data.Binary (Binary)
-import qualified Data.Map.Strict as Map (Map, fromList, map)
+import qualified Data.Map.Strict as Map (Map, fromList, map, singleton)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
@@ -239,8 +239,20 @@ handleInitiateCommit = do
   -- Write the start commit record to the transaction log.
   lift . liftIO $ writeStartCommit
 
+-- Send the coordinator the vote of this process.
 handleVoteRequest :: ProcessId -> ServerProcess ()
-handleVoteRequest coordinator = lift $ say "Got vote request"
+handleVoteRequest coordinator = do
+  vote  <- gets (view myVote)
+  my_id <- asks (myId)
+  -- Send the vote of this process to the coordinator.
+  tell . pure $ Letter coordinator my_id (VoteResponse vote) 
+  -- Create timeout for response from coordinator.
+  modify . set timeoutMap $ Map.singleton coordinator timeout
+  if vote == Commit
+    -- If we voted yes, then write a yes record in the DT log.
+    then lift . liftIO $ writeYesRecord
+    -- if we voted no, then write an abort record in the DT log.
+    else lift . liftIO $ writeAbortRecord
 
 handleVoteResponse :: ProcessId -> Vote -> ServerProcess ()
 handleVoteResponse voter vote = do

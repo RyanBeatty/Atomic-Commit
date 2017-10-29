@@ -5,6 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main where
 
+import DTLog (writeStartCommit, writeCommitRecord, writeAbortRecord)
 import Utils (choose, stripAndTrim)
 
 import Control.Concurrent (threadDelay)
@@ -74,13 +75,6 @@ data Message =
   | Increment
   deriving (Show, Generic, Typeable)
 instance Binary Message
-
--- A log message to be written to the distributed transaction log.
-data DTLogMessage =
-    StartCommit
-  | CommitRecord
-  | AbortRecord
-  deriving (Show)
 
 -- A Letter contains the process id of the sender and recipient as well as a message payload.
 data Letter = Letter
@@ -242,7 +236,7 @@ handleInitiateCommit = do
   let ps = zip (peers config) (repeat timeout)
   modify $ set timeoutMap (Map.fromList ps)
   -- Write the start commit record to the transaction log.
-  writeDTLogMessage StartCommit
+  lift . liftIO $ writeStartCommit
 
 handleVoteRequest :: ProcessId -> ServerProcess ()
 handleVoteRequest coordinator = lift $ say "Got vote request"
@@ -260,11 +254,11 @@ handleVoteResponse voter vote = do
       if all (== Commit) (map snd voted) && my_vote == Commit
         then do
           -- send commit message to all processes.
-          writeDTLogMessage CommitRecord
+          lift . liftIO $ writeCommitRecord
           tell $ map (\pid -> Letter (myId config) pid CommitMessage) (peers config)
         else do
           -- Send abort message to all processes that voted commit.
-          writeDTLogMessage AbortRecord
+          lift . liftIO $ writeAbortRecord
           let (voted_commit, _) = unzip $ filter ((==) Commit . snd) voted
           tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
     else return ()
@@ -275,9 +269,6 @@ handleVoteChange new_vote = modify (set myNextVote new_vote)
 
 handleIncrement :: ServerProcess ()
 handleIncrement = modify (over transaction succ)
-
-writeDTLogMessage :: DTLogMessage -> ServerProcess ()
-writeDTLogMessage message = lift . liftIO $ undefined
  
 main :: IO ()
 main = do

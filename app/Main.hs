@@ -222,6 +222,8 @@ letterHandler letter =
     AbortMessage                    -> return handleAbortMessage
     VoteChange { newVote=new_vote } -> return $ handleVoteChange new_vote
     Increment                       -> return handleIncrement
+    -- TODO: Implement some handler for unkown or unexpected messages.
+    _                               -> return ()
 
 handleTick :: ServerProcess ()
 handleTick = do
@@ -280,16 +282,23 @@ handleVoteResponse voter vote = do
           tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
     else return ()
 
+-- Handle decision to commit.
 handleCommitMessage :: ServerProcess ()
-handleCommitMessage = lift $ say "got commit message!"
+handleCommitMessage = do
+  lift $ say "got commit message!"
+  lift . liftIO $ writeCommitRecord
 
+-- Handle dicision to abort.
 handleAbortMessage :: ServerProcess ()
-handleAbortMessage = lift $ say "got abort Message!"
+handleAbortMessage = do
+  lift $ say "got abort Message!"
+  lift . liftIO $ writeAbortRecord
 
 -- Change the next vote of the process.
 handleVoteChange :: Vote -> ServerProcess ()
 handleVoteChange new_vote = modify (set myVote new_vote)
 
+-- Increment the value of the current transaction.
 handleIncrement :: ServerProcess ()
 handleIncrement = modify (over transaction succ)
  

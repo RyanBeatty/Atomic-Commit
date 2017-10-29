@@ -222,8 +222,8 @@ letterHandler letter =
     AbortMessage                    -> return handleAbortMessage
     VoteChange { newVote=new_vote } -> return $ handleVoteChange new_vote
     Increment                       -> return handleIncrement
-    -- TODO: Implement some handler for unkown or unexpected messages.
-    _                               -> return ()
+    -- TODO: Implement some handler for unkown or unexpected messages. Or figure out a way to limit
+    -- expected messages.
 
 handleTick :: ServerProcess ()
 handleTick = do

@@ -218,6 +218,8 @@ letterHandler letter =
     InitiateCommit                  -> return handleInitiateCommit
     VoteRequest                     -> return . handleVoteRequest . senderOf $ letter
     VoteResponse { vote=vote }      -> return $ handleVoteResponse (senderOf letter) vote
+    CommitMessage                   -> return handleCommitMessage
+    AbortMessage                    -> return handleAbortMessage
     VoteChange { newVote=new_vote } -> return $ handleVoteChange new_vote
     Increment                       -> return handleIncrement
 
@@ -277,6 +279,12 @@ handleVoteResponse voter vote = do
           let (voted_commit, _) = unzip $ filter ((==) Yes . snd) voted
           tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
     else return ()
+
+handleCommitMessage :: ServerProcess ()
+handleCommitMessage = lift $ say "got commit message!"
+
+handleAbortMessage :: ServerProcess ()
+handleAbortMessage = lift $ say "got abort Message!"
 
 -- Change the next vote of the process.
 handleVoteChange :: Vote -> ServerProcess ()

@@ -41,7 +41,7 @@ data ServerConfig = ServerConfig
   deriving (Show)
 
 -- A vote is either to commit the transaction or to abort it.
-data Vote = Commit | Abort
+data Vote = Yes | No
   deriving (Show, Eq, Generic, Typeable)
 instance Binary Vote
 
@@ -99,7 +99,7 @@ newControllerState :: ControllerState
 newControllerState = ControllerState mempty
 
 newServerState :: ServerState
-newServerState = ServerState mempty mempty Commit 0
+newServerState = ServerState mempty mempty Yes 0
 
 -- Number of Tick messages that can pass before an expected response is marked as timing out.
 timeout :: Integer
@@ -125,12 +125,12 @@ commandHandler state "spawn" =
 commandHandler state (stripAndTrim "commit" -> Just index) =
   -- Initiate the atomic commit protocol with the chosen process as coordinator.
   sendInititateCommit (choose (servers state) index) >> return state
-commandHandler state (stripAndTrim "vote commit" -> Just index) =
+commandHandler state (stripAndTrim "vote yes" -> Just index) =
   -- Tell the chosen process to change their next vote to be commit.
-  sendVoteChange (choose (servers state) index) Commit >> return state
-commandHandler state (stripAndTrim "vote abort" -> Just index) =
+  sendVoteChange (choose (servers state) index) Yes >> return state
+commandHandler state (stripAndTrim "vote no" -> Just index) =
   -- Tell the chosen process to change their next vote to be abort.
-  sendVoteChange (choose (servers state) index) Abort >> return state
+  sendVoteChange (choose (servers state) index) No >> return state
 commandHandler state (stripAndTrim "inc" -> Just index) =
   sendIncrement (choose (servers state) index) >> return state
 commandHandler state command  =
@@ -248,7 +248,7 @@ handleVoteRequest coordinator = do
   tell . pure $ Letter coordinator my_id (VoteResponse vote) 
   -- Create timeout for response from coordinator.
   modify . set timeoutMap $ Map.singleton coordinator timeout
-  if vote == Commit
+  if vote == Yes
     -- If we voted yes, then write a yes record in the DT log.
     then lift . liftIO $ writeYesRecord
     -- if we voted no, then write an abort record in the DT log.
@@ -265,7 +265,7 @@ handleVoteResponse voter vote = do
   if received_all_votes
     then do
       my_vote <- gets (view myVote)
-      let all_votes_commit = all (== Commit) (map snd voted) && my_vote == Commit
+      let all_votes_commit = all (== Yes) (map snd voted) && my_vote == Yes
       if all_votes_commit
         then do
           -- send commit message to all processes.
@@ -274,7 +274,7 @@ handleVoteResponse voter vote = do
         else do
           -- Send abort message to all processes that voted commit.
           lift . liftIO $ writeAbortRecord
-          let (voted_commit, _) = unzip $ filter ((==) Commit . snd) voted
+          let (voted_commit, _) = unzip $ filter ((==) Yes . snd) voted
           tell $ map (\pid -> Letter (myId config) pid AbortMessage) voted_commit
     else return ()
 

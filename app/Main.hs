@@ -51,8 +51,9 @@ data ServerState = ServerState
                                              -- expecting from other processes. Everytime a tick happens
                                              -- the timeout count should be decremented for each
                                              -- expected response.
-  , _votes :: [(ProcessId, Vote)] -- List of which process voted which way.
-  , _myNextVote :: Vote -- Vote for this processes' next vote request.
+  , _votes :: [(ProcessId, Vote)]            -- List of which process voted which way.
+  , _myVote :: Vote                          -- Vote that this process will send when it gets vote
+                                             -- requests.
   , _transaction :: Integer
   }
   deriving (Show)
@@ -251,7 +252,7 @@ handleVoteResponse voter vote = do
   let received_all_votes = map fst voted == peers config
   if received_all_votes
     then do
-      my_vote <- gets (view myNextVote)
+      my_vote <- gets (view myVote)
       let all_votes_commit = all (== Commit) (map snd voted) && my_vote == Commit
       if all_votes_commit
         then do
@@ -267,7 +268,7 @@ handleVoteResponse voter vote = do
 
 -- Change the next vote of the process.
 handleVoteChange :: Vote -> ServerProcess ()
-handleVoteChange new_vote = modify (set myNextVote new_vote)
+handleVoteChange new_vote = modify (set myVote new_vote)
 
 handleIncrement :: ServerProcess ()
 handleIncrement = modify (over transaction succ)

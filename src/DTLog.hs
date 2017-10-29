@@ -14,7 +14,7 @@ data DTLogMessage =
   deriving (Show)
 
 writeDTLogMessage :: DTLogMessage -> IO ()
-writeDTLogMessage message = undefined
+writeDTLogMessage message = print $ "Wrote Message: " ++ show message
 
 writeYesRecord :: IO ()
 writeYesRecord = writeDTLogMessage YesRecord

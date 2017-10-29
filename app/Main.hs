@@ -5,7 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main where
 
-import Lib (choose, stripAndTrim)
+import Utils (choose, stripAndTrim)
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process (

@@ -72,7 +72,7 @@ data Message =
       { vote :: Vote }
   | CommitMessage      -- Tells the process that it should commit the transaction.
   | AbortMessage       -- Tells the process that it should abort the transaction.
-  | Increment
+  | Increment          -- Tells the process that it should increment the value of the current transaction.
   deriving (Show, Generic, Typeable)
 instance Binary Message
 

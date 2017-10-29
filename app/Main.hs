@@ -244,14 +244,16 @@ handleVoteRequest coordinator = lift $ say "Got vote request"
 handleVoteResponse :: ProcessId -> Vote -> ServerProcess ()
 handleVoteResponse voter vote = do
   -- Add this voter + vote to list of votes.
-  modify $ over votes (++ [(voter, vote)])
+  modify . over votes . mappend . pure $ (voter, vote)
   -- Check if all voters have voted.
   voted <- gets (view votes)
   config <- ask
-  if map fst voted == peers config
+  let received_all_votes = map fst voted == peers config
+  if received_all_votes
     then do
       my_vote <- gets (view myNextVote)
-      if all (== Commit) (map snd voted) && my_vote == Commit
+      let all_votes_commit = all (== Commit) (map snd voted) && my_vote == Commit
+      if all_votes_commit
         then do
           -- send commit message to all processes.
           lift . liftIO $ writeCommitRecord

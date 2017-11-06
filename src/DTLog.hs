@@ -5,6 +5,8 @@ module DTLog
     , writeAbortRecord
     ) where
 
+import System.IO (FilePath, appendFile)
+
 -- A log message to be written to the distributed transaction log.
 data DTLogMessage =
     StartCommit
@@ -13,17 +15,17 @@ data DTLogMessage =
   | AbortRecord
   deriving (Show)
 
-writeDTLogMessage :: DTLogMessage -> IO ()
-writeDTLogMessage message = print $ "Wrote Message: " ++ show message
+writeDTLogMessage :: FilePath -> DTLogMessage -> IO ()
+writeDTLogMessage filepath message = appendFile filepath (show message)
 
 writeYesRecord :: IO ()
-writeYesRecord = writeDTLogMessage YesRecord
+writeYesRecord = writeDTLogMessage undefined YesRecord
 
 writeStartCommit :: IO ()
-writeStartCommit = writeDTLogMessage StartCommit
+writeStartCommit = writeDTLogMessage undefined StartCommit
 
 writeCommitRecord :: IO ()
-writeCommitRecord = writeDTLogMessage CommitRecord
+writeCommitRecord = writeDTLogMessage undefined CommitRecord
 
 writeAbortRecord :: IO ()
-writeAbortRecord = writeDTLogMessage AbortRecord
+writeAbortRecord = writeDTLogMessage undefined AbortRecord
